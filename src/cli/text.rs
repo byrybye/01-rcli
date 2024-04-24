@@ -4,6 +4,7 @@ use crate::{
 };
 
 use super::{verify_file, verify_path};
+use anyhow::Ok;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use clap::Parser;
 use enum_dispatch::enum_dispatch;
@@ -19,6 +20,10 @@ pub enum TextSubCommand {
     Verify(TextVerifyOpts),
     #[command(about = "Generate a random blake3 key or ed25519 key pair")]
     Generate(KeyGenerateOpts),
+    #[command(about = "Encrypt")]
+    Encrypt(EncryptOpts),
+    #[command(about = "Decrypt")]
+    Decrypt(DecryptOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -50,6 +55,19 @@ pub struct KeyGenerateOpts {
     #[arg(short, long, value_parser = verify_path)]
     pub output_path: PathBuf,
 }
+
+#[derive(Debug, Parser)]
+pub struct EncryptOpts {    
+    #[arg(short, long)]
+    pub key: String,    
+}
+
+#[derive(Debug, Parser)]
+pub struct DecryptOpts {    
+    #[arg(short, long)]
+    pub key: String,    
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum TextSignFormat {
@@ -121,6 +139,20 @@ impl CmdExector for KeyGenerateOpts {
         for (k, v) in key {
             fs::write(self.output_path.join(k), v).await?;
         }
+        Ok(())
+    }
+}
+
+impl CmdExector for EncryptOpts {
+    async fn execute(self)-> anyhow::Result<()>{
+        println!("encrypt");
+        Ok(())
+    }
+}
+
+impl CmdExector for DecryptOpts {
+    async fn execute(self)-> anyhow::Result<()>{
+        println!("decrypt");
         Ok(())
     }
 }

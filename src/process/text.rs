@@ -4,6 +4,17 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use std::{collections::HashMap, io::Read};
 
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine as _,
+};
+
+use chacha20poly1305::{
+    aead::{Aead, AeadCore, KeyInit, OsRng as chachaOsRng},
+    ChaCha20Poly1305, Nonce
+};
+
+
 pub trait TextSigner {
     // signer could sign any input data
     fn sign(&self, reader: &mut dyn Read) -> Result<Vec<u8>>;
@@ -149,10 +160,23 @@ pub fn process_text_key_generate(format: TextSignFormat) -> Result<HashMap<&'sta
     }
 }
 
+pub fn process_text_encrypt(key:String)->Result<String>{
+    todo!()
+}
+
+
+pub fn process_text_decrypt(key:String)->Result<String>{
+    todo!()
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Ok;
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use chacha20poly1305::{aead::generic_array::GenericArray, consts::{U12, U32}};
+    use serde_json::from_slice;
 
     const KEY: &[u8] = include_bytes!("../../fixtures/blake3.txt");
 
@@ -168,13 +192,52 @@ mod tests {
     }
 
     #[test]
-    fn test_process_text_verify() -> Result<()> {
+    fn testc_process_text_verify() -> Result<()> {
         let mut reader = "hello".as_bytes();
         let format = TextSignFormat::Blake3;
         let sig = "33Ypo4rveYpWmJKAiGnnse-wHQhMVujjmcVkV4Tl43k";
         let sig = URL_SAFE_NO_PAD.decode(sig)?;
         let ret = process_text_verify(&mut reader, KEY, &sig, format)?;
         assert!(ret);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_encrypt() -> Result<()>
+    {            
+        let key = ChaCha20Poly1305::generate_key(&mut OsRng);        
+        let key_base64 = STANDARD.encode(&key.as_slice().to_vec());
+        eprintln!("key:{}", key_base64);
+        let cipher = ChaCha20Poly1305::new(&key);
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits; unique per message        
+        let nonce_base64 = STANDARD.encode(&nonce.as_slice().to_vec());
+        eprintln!("nonce:{}", nonce_base64);
+        let ciphertext = cipher.encrypt(&nonce, b"plaintext message".as_ref()).unwrap();
+        let plaintext = cipher.decrypt(&nonce, ciphertext.as_ref()).unwrap();
+        assert_eq!(&plaintext, b"plaintext message");
+        Ok(())
+    }
+
+    use crate::{get_content, get_reader};
+    #[test]
+    fn test_process_encrypt_fix() -> Result<()>
+    {   
+        let input_key = "fixtures/chacha_key.txt";                
+        let key_string = String::from_utf8(get_content(input_key)?)?;
+        println!("key:{}", key_string);
+        let input_nonce = "fixtures/chacha_nonce.txt";        
+        let nonce_string =String::from_utf8( get_content(input_nonce)?)?;
+        println!("nonce:{}", nonce_string);
+        let key_u8: Vec<u8> = STANDARD.decode(key_string)?;
+        let nonce_u8 = STANDARD.decode(nonce_string)?;        
+        let key = GenericArray::<u8,U32>::from_slice(&key_u8);
+        let cipher = ChaCha20Poly1305::new(key);
+        let nonce = GenericArray::<u8,U12>::from_slice(&nonce_u8);
+
+        let ciphertext = cipher.encrypt(nonce, b"plaintext message".as_ref()).unwrap();
+        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).unwrap();
+        assert_eq!(&plaintext, b"plaintext message");        
+
         Ok(())
     }
 }
