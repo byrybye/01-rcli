@@ -1208,6 +1208,7 @@ dependencies = [
  "ed25519-dalek",
  "enum_dispatch",
  "rand",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",

@@ -169,7 +169,6 @@ pub fn process_text_encrypt(input_key: String) -> Result<String> {
     let key = GenericArray::<u8, U32>::from_slice(&key_u8);
     let cipher = ChaCha20Poly1305::new(key);
     let nonce = GenericArray::<u8, U12>::from_slice(&nonce_u8);
-
     //println!("key:{}", input_key);
     let ciphertext = cipher.encrypt(nonce, input_key.as_ref()).unwrap();
     let result = STANDARD.encode(ciphertext);
