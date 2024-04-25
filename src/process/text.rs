@@ -205,7 +205,7 @@ mod tests {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use chacha20poly1305::{
         aead::generic_array::GenericArray,
-        consts::{U12, U32},
+        consts::{U12, U32}, AeadCore,
     };
     use serde_json::from_slice;
 
