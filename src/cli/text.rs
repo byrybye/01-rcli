@@ -57,17 +57,16 @@ pub struct KeyGenerateOpts {
 }
 
 #[derive(Debug, Parser)]
-pub struct EncryptOpts {    
+pub struct EncryptOpts {
     #[arg(short, long)]
-    pub key: String,    
+    pub key: String,
 }
 
 #[derive(Debug, Parser)]
-pub struct DecryptOpts {    
+pub struct DecryptOpts {
     #[arg(short, long)]
-    pub key: String,    
+    pub key: String,
 }
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum TextSignFormat {
@@ -144,15 +143,21 @@ impl CmdExector for KeyGenerateOpts {
 }
 
 impl CmdExector for EncryptOpts {
-    async fn execute(self)-> anyhow::Result<()>{
-        println!("encrypt");
+    async fn execute(self) -> anyhow::Result<()> {
+        //println!("encrypt");
+        //println!("{}", self.key);
+        let result = crate::process::text::process_text_encrypt(self.key)?;
+        println!("{}", result);
         Ok(())
     }
 }
 
 impl CmdExector for DecryptOpts {
-    async fn execute(self)-> anyhow::Result<()>{
-        println!("decrypt");
+    async fn execute(self) -> anyhow::Result<()> {
+        //println!("decrypt");
+        //println!("{}", self.key);
+        let result = crate::process::text::process_text_decrypt(self.key)?;
+        println!("{}", result);
         Ok(())
     }
 }

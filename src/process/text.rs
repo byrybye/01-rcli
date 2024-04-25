@@ -1,19 +1,16 @@
-use crate::{process_genpass, TextSignFormat};
+use crate::{get_content, process_genpass, TextSignFormat};
 use anyhow::Result;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use std::{collections::HashMap, io::Read};
 
-use base64::{
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
-    Engine as _,
-};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng as chachaOsRng},
-    ChaCha20Poly1305, Nonce
+    aead::{generic_array::GenericArray, Aead, KeyInit},
+    consts::{U12, U32},
+    ChaCha20Poly1305,
 };
-
 
 pub trait TextSigner {
     // signer could sign any input data
@@ -160,22 +157,57 @@ pub fn process_text_key_generate(format: TextSignFormat) -> Result<HashMap<&'sta
     }
 }
 
-pub fn process_text_encrypt(key:String)->Result<String>{
-    todo!()
+pub fn process_text_encrypt(input_key: String) -> Result<String> {
+    let key_file = "fixtures/chacha_key.txt";
+    let key_string = String::from_utf8(get_content(key_file)?)?;
+    //println!("key:{}", key_string);
+    let nonce_file = "fixtures/chacha_nonce.txt";
+    let nonce_string = String::from_utf8(get_content(nonce_file)?)?;
+    //println!("nonce:{}", nonce_string);
+    let key_u8: Vec<u8> = STANDARD.decode(key_string)?;
+    let nonce_u8 = STANDARD.decode(nonce_string)?;
+    let key = GenericArray::<u8, U32>::from_slice(&key_u8);
+    let cipher = ChaCha20Poly1305::new(key);
+    let nonce = GenericArray::<u8, U12>::from_slice(&nonce_u8);
+
+    //println!("key:{}", input_key);
+    let ciphertext = cipher.encrypt(nonce, input_key.as_ref()).unwrap();
+    let result = STANDARD.encode(ciphertext);
+    //println!("result:{}", result);
+    Ok(result)
 }
 
-
-pub fn process_text_decrypt(key:String)->Result<String>{
-    todo!()
+pub fn process_text_decrypt(input_key: String) -> Result<String> {
+    let key_file = "fixtures/chacha_key.txt";
+    let key_string = String::from_utf8(get_content(key_file)?)?;
+    //println!("key:{}", key_string);
+    let nonce_file = "fixtures/chacha_nonce.txt";
+    let nonce_string = String::from_utf8(get_content(nonce_file)?)?;
+    //println!("nonce:{}", nonce_string);
+    let key_u8: Vec<u8> = STANDARD.decode(key_string)?;
+    let nonce_u8 = STANDARD.decode(nonce_string)?;
+    let key = GenericArray::<u8, U32>::from_slice(&key_u8);
+    let cipher = ChaCha20Poly1305::new(key);
+    let nonce = GenericArray::<u8, U12>::from_slice(&nonce_u8);
+    //println!("key:{}", input_key);
+    let key_for_decrypt = STANDARD.decode(input_key)?;
+    let ciphertext = cipher.decrypt(nonce, key_for_decrypt.as_ref()).unwrap();
+    let result = String::from_utf8(ciphertext)?;
+    //println!("result:{}", result);
+    Ok(result)
 }
-
 
 #[cfg(test)]
 mod tests {
+    use std::result;
+
     use super::*;
     use anyhow::Ok;
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    use chacha20poly1305::{aead::generic_array::GenericArray, consts::{U12, U32}};
+    use chacha20poly1305::{
+        aead::generic_array::GenericArray,
+        consts::{U12, U32},
+    };
     use serde_json::from_slice;
 
     const KEY: &[u8] = include_bytes!("../../fixtures/blake3.txt");
@@ -203,16 +235,31 @@ mod tests {
     }
 
     #[test]
-    fn test_process_encrypt() -> Result<()>
-    {            
-        let key = ChaCha20Poly1305::generate_key(&mut OsRng);        
+    fn test_process_text_encrypt() -> Result<()> {
+        let msg: String = process_text_encrypt("彭海波".to_string())?;
+        println!("{}", msg);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_text_decrypt() -> Result<()> {
+        let msg: String = process_text_decrypt("WkNn4L1o6trrM3JayFm7jCi8jJ+bySSryw==".to_string())?;
+        println!("{}", msg);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_encrypt() -> Result<()> {
+        let key = ChaCha20Poly1305::generate_key(&mut OsRng);
         let key_base64 = STANDARD.encode(&key.as_slice().to_vec());
         eprintln!("key:{}", key_base64);
         let cipher = ChaCha20Poly1305::new(&key);
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits; unique per message        
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits; unique per message
         let nonce_base64 = STANDARD.encode(&nonce.as_slice().to_vec());
         eprintln!("nonce:{}", nonce_base64);
-        let ciphertext = cipher.encrypt(&nonce, b"plaintext message".as_ref()).unwrap();
+        let ciphertext = cipher
+            .encrypt(&nonce, b"plaintext message".as_ref())
+            .unwrap();
         let plaintext = cipher.decrypt(&nonce, ciphertext.as_ref()).unwrap();
         assert_eq!(&plaintext, b"plaintext message");
         Ok(())
@@ -220,23 +267,24 @@ mod tests {
 
     use crate::{get_content, get_reader};
     #[test]
-    fn test_process_encrypt_fix() -> Result<()>
-    {   
-        let input_key = "fixtures/chacha_key.txt";                
+    fn test_process_encrypt_fix() -> Result<()> {
+        let input_key = "fixtures/chacha_key.txt";
         let key_string = String::from_utf8(get_content(input_key)?)?;
         println!("key:{}", key_string);
-        let input_nonce = "fixtures/chacha_nonce.txt";        
-        let nonce_string =String::from_utf8( get_content(input_nonce)?)?;
+        let input_nonce = "fixtures/chacha_nonce.txt";
+        let nonce_string = String::from_utf8(get_content(input_nonce)?)?;
         println!("nonce:{}", nonce_string);
         let key_u8: Vec<u8> = STANDARD.decode(key_string)?;
-        let nonce_u8 = STANDARD.decode(nonce_string)?;        
-        let key = GenericArray::<u8,U32>::from_slice(&key_u8);
+        let nonce_u8 = STANDARD.decode(nonce_string)?;
+        let key = GenericArray::<u8, U32>::from_slice(&key_u8);
         let cipher = ChaCha20Poly1305::new(key);
-        let nonce = GenericArray::<u8,U12>::from_slice(&nonce_u8);
+        let nonce = GenericArray::<u8, U12>::from_slice(&nonce_u8);
 
-        let ciphertext = cipher.encrypt(nonce, b"plaintext message".as_ref()).unwrap();
+        let ciphertext = cipher
+            .encrypt(nonce, b"plaintext message".as_ref())
+            .unwrap();
         let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).unwrap();
-        assert_eq!(&plaintext, b"plaintext message");        
+        assert_eq!(&plaintext, b"plaintext message");
 
         Ok(())
     }
