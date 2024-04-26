@@ -1,10 +1,9 @@
-use std::{fmt, str::FromStr};
 use regex::Regex; 
 use clap::Parser;
 use enum_dispatch::enum_dispatch;
-use anyhow::Result;
+use anyhow::{Ok, Result};
 
-use crate::CmdExector;
+use crate::{process, CmdExector};
 
 #[derive(Debug, Parser)]
 #[enum_dispatch(CmdExector)]
@@ -29,65 +28,49 @@ pub struct JwtSignOpts {
 pub struct JwtVerifyOpts {
     #[arg(short, long)]
     pub token: String,
+    #[arg(long)]
+    pub sub: String,
+    #[arg(long)]
+    pub aud: String,
 }
 
+fn parse_exp(exp_ex: String) -> Result<String> {
+    let reg = Regex::new(r"^(\d+)([a-zA-Z])$").unwrap();
+    if !reg.is_match(&exp_ex) {
+        Err(anyhow::anyhow!("input format error"))
+    } else {
+        let caps = reg.captures(&exp_ex).unwrap();
+        let num: i64 = caps[1].parse().unwrap();
+        let part = &caps[2];
+        let second_count_result = match part {
+            "s" => Ok(num),
+            "m" => Ok(num * 60),
+            "h" => Ok(num * 60 * 60),
+            "d" => Ok(num * 60 * 60 * 24),
+            _ => Err(anyhow::anyhow!(
+                "format error the last char is not [s,m,h,d]"
+            )),
+        };
+        Ok(second_count_result?.to_string())        
+    }
+}
 
-fn verify_exp_format(exp_ex: &str) -> Result<String, &'static str> {    
-    //Err("File does not exist")
-    Ok("".to_string())
+fn verify_exp_format(exp_ex: &str) -> Result<String> {    
+    parse_exp(exp_ex.to_string())   
 }
 
 impl CmdExector for JwtSignOpts {
     async fn execute(self) -> anyhow::Result<()> {
-        println!("jwt sign");
-        println!("{}", self.exp);
+        let token = process::jwt::jwt_sign(self.sub, self.aud, self.exp.parse::<i64>()?);
+        println!("token:{}", token?);
         Ok(())
     }
 }
 
 impl CmdExector for JwtVerifyOpts {
     async fn execute(self) -> anyhow::Result<()> {
-        println!("jwt verify");
-        println!("{}", self.token);
+        let claim = process::jwt::jwt_verify(self.token, self.sub, self.aud);
+        println!("token:{:#?}", claim?);
         Ok(())
     }
-}
-
-
-fn split_string_with_regex(s: &str) -> Result<(String, String), String> {  
-    let re = Regex::new(r"^(\d+)([a-zA-Z])$").unwrap();  
-    let captures = re.captures(s);  
-    captures.ok_or_else(|| {  
-        format!("Input string '{}' does not match the expected format of numbers followed by a single letter.", s)  
-    }).and_then(|caps| {  
-        // 确保至少有两个捕获组（数字和字母）  
-        if caps.len() < 3 {  
-            Err("Regular expression did not capture both number and letter as expected.".to_string())  
-        } else {  
-            // 提取数字和字母部分  
-            let number_part = caps[1].to_string();  
-            let letter_part = caps[2].to_string();  
-            Ok((number_part, letter_part))  
-        }  
-    })  
-}  
-
-#[test]
-fn test_split_string_with_regex() {  
-    let s = "12345a";  
-    match split_string_with_regex(&s) {  
-        Ok((number, letter)) => {  
-            println!("Number: {}, Letter: {}", number, letter);  
-        },  
-        Err(e) => {  
-            println!("Error: {}", e);  
-        }  
-    }
-    let s_invalid = "abcdef";  
-    match split_string_with_regex(&s_invalid) {  
-        Ok((_, _)) => unreachable!(), // 这个分支不应该被执行到  
-        Err(e) => {  
-            println!("Error for invalid input: {}", e);  
-        }  
-    }  
 }
