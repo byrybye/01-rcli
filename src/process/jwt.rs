@@ -24,11 +24,17 @@ pub fn jwt_sign(sub:String, aud:String, exp: i64)->Result<String>
     Ok(token)
 }
 
-pub fn jwt_verify(token:String, sub:String, aud:String,) ->Result<Claims>{
+pub fn jwt_verify(token:String, sub:Option<String>, aud:Option<String>) ->Result<Claims>{
     let key = b"secret";
     let mut validation = Validation::new(Algorithm::HS256);
-    validation.sub = Some(sub);    
-    validation.set_audience(&[aud]);
+    validation.sub = sub;    
+    if let Some(a) = aud{
+        validation.validate_aud = true;
+        validation.set_audience(&[a]);    
+    }
+    else {            
+        validation.validate_aud = false;
+    }
     validation.set_required_spec_claims(&["exp", "sub", "aud"]);
     println!("{}", token);
     let token = decode::<Claims>(

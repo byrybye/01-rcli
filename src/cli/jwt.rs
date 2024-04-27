@@ -29,9 +29,9 @@ pub struct JwtVerifyOpts {
     #[arg(short, long)]
     pub token: String,
     #[arg(long)]
-    pub sub: String,
+    pub sub: Option<String>,
     #[arg(long)]
-    pub aud: String,
+    pub aud: Option<String>,
 }
 
 fn parse_exp(exp_ex: String) -> Result<String> {
